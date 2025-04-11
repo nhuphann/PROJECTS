@@ -1,0 +1,153 @@
+---
+title: "Advertising Impact on Sales"
+output:
+  pdf_document: default
+  date: "2024-07-24"
+---
+
+## Objective
+
+To determine how different types of advertising (TV, Radio, and Newspaper) influence sales, and to build the most effective linear regression model for predicting sales based on these advertising expenditures.​
+
+````{r, echo= FALSE}
+setwd("~/Desktop/PROJECTS/STATS_INFERENCE/PROJECTS_R/AVERTISING_EFFECTs")
+````
+
+## Data Description
+```{r  Data Description}
+advertising <- read.csv("advertising.csv")
+attach(advertising)
+# Calculate mean and standard deviation for each variable
+mean_tv <- mean(TV)
+std_tv <- sd(TV)
+
+mean_radio <- mean(Radio)
+std_radio <- sd(Radio)
+
+mean_newspaper <- mean(Newspaper)
+std_newspaper <- sd(Newspaper)
+
+mean_sales <- mean(Sales)
+std_sales <- sd(Sales)
+
+summary_table_5x3 <- data.frame(
+  Variable = c("Sales","Radio", "Newspaper","TV"),
+  Mean = c(mean_sales, mean_radio, mean_newspaper, mean_tv),
+  Std_Dev = c(std_sales,std_radio, std_newspaper,std_tv)
+)
+print(summary_table_5x3)
+#Histograms
+par(mfrow=c(2,2))
+hist(Sales,main="Sales", xlab="Sales", ylab="Frequency", col="purple", border="black",breaks=20,ylim=c(0,30))
+hist(Radio,main="Radio Advertising", xlab="Radio", ylab="Frequency", col="green", border="black",breaks=20,ylim=c(0,15))
+hist(Newspaper,main="Newspaper Advertising", xlab="Newspaper", ylab="Frequency", col="red", border="black", breaks=20,ylim=c(0,30))
+hist(TV, main="TV Advertising", xlab="TV", ylab="Frequency", col="blue", border="black",breaks=20, ylim=c(0,25))
+#Scatter plot of model
+model <- lm(Sales~Radio + Newspaper + TV, data=advertising)
+pairs(Sales~Radio + Newspaper + TV, data=advertising)
+```
+
+From the scatterplot matrix, it is evident that the TV advertising budget shows a strong linear relationship with Sales, whereas Radio and Newspaper do not display any clear linear trends with the response variable. The variances of all three predictors appear to be random and relatively constant, indicating no major issues with heteroscedasticity. Additionally, there are a few noticeable outliers in the Sales vs. Newspaper plot. Importantly, there is no visible multicollinearity among the predictors, as the variables are not strongly correlated with each other.
+
+
+## Results and Interpretation
+```{r Results and Interpretation}
+summary(model)
+```
+
+The multiple linear regression model Sales ~ TV + Radio + Newspaper was fit to the data to assess the impact of different advertising channels on sales. Based on the summary output, TV and Radio were found to be highly significant predictors (p-values < 2e-16), while Newspaper had no significant contribution (p = 0.954). The model has a high R-squared of 0.9026, indicating that approximately 90% of the variance in Sales is explained by the three predictors. The F-statistic is also highly significant, supporting the overall model fit.
+
+```{r}
+par(mfrow=c(2,2))
+#Diagnostic Plot
+plot(model)
+```
+
+Diagnostic plots indicate that the model meets the assumption of linearity, with no strong curvature in the residuals vs. fitted plot. The Q-Q plot suggests that the residuals are approximately normally distributed, although a few outliers are present. The scale-location plot confirms that the variance of the error term is roughly constant, though there's a slight trend that could be improved. Lastly, the residuals vs. leverage plot shows that some data points may be influential, but most observations fall within an acceptable leverage range.
+
+```{r}
+#Transfor/Filter Data
+library(car)
+filteredmodel <- advertising + 0.000001
+detach(advertising)
+attach(filteredmodel)
+#because Radio has 1 zero value data
+```
+
+```{r}
+#Box Cox Transformation
+summary(powerTransform(cbind(Sales,Radio,Newspaper,TV)~1,filteredmodel))
+#transform y and x
+sqrtSales <- sqrt(Sales)
+sqrtNewspaper <- sqrt(Newspaper)
+sqrtTV <- sqrt(TV)
+tRadio <- Radio^(0.72)
+```
+
+To improve model assumptions, a Box-Cox transformation was applied to the variables to assess whether transformation would improve multivariate normality. The estimated power transformations suggested that all variables should be approximately square root or log transformed, with optimal lamda values around 0.5 for TV and Newspaper, 0.72 for Radio, and 0.66 for Sales. The likelihood ratio tests strongly rejected both the null hypotheses that all variables require no transformation, and all should be log-transformed, with p-values < 2.2e-16 in both cases.
+
+```{r}
+transformedmodel <- lm(sqrtSales~tRadio+sqrtNewspaper+sqrtTV)
+summary(transformedmodel)
+pairs(sqrtSales~tRadio+sqrtNewspaper+sqrtTV)
+par(mfrow=c(2,2))
+```
+
+This transformed model yielded a higher adjusted R-squared of 0.9255, indicating improved explanatory power compared to the original model. Both tRadio and sqrt(TV) remained statistically significant predictors (p < 2e-16), while sqrt(Newspaper) remained insignificant, aligning with earlier findings.
+
+```{r}
+#Diagnostic Plot for transformed model
+plot(transformedmodel)
+```
+
+Diagnostic plots confirm improved model fit: residuals appear more linear and normally distributed, with constant variance and no major outliers. Overall, the transformed model better satisfies regression assumptions and improves predictive accuracy.
+
+```{r}
+#Check added variable plot for each predictor
+par(mfrow=c(2,2))
+avPlot(transformedmodel,variable = tRadio, ask=FALSE)
+avPlot(transformedmodel,variable = sqrtNewspaper, ask=FALSE)
+avPlot(transformedmodel,variable = sqrtTV, ask=FALSE)
+```
+
+The added-variable plots show that tRadio and sqrtTV have strong partial relationships with the response variable sqrtSales, confirming their importance in the model. The plot for sqrtNewspaper, however, shows no noticeable trend, suggesting it does not contribute significantly once other variables are accounted for.
+
+```{r Results and Interpretation cont}
+#check for collinearity
+vif(transformedmodel)
+```
+
+The Variance Inflation Factors (VIFs) for all predictors are close to 1, indicating no multicollinearity. This validates that the predictors are independent and stable in the model.
+
+```{r}
+#Use Forward Stepwise regression for variable selection
+#since newspapers var does not have sign slope
+mint <- lm(sqrtSales~1,data=advertising)
+forwardAIC <- step(mint,scope=list(lower=~1,
+upper=~tRadio+sqrtNewspaper+sqrtTV),
+direction="forward",data=advertising)
+```
+
+Using AIC-based forward selection, the procedure initially identified sqrtTV as the strongest single predictor, followed by tRadio. Although sqrtNewspaper was tested, it did not improve the model and was ultimately excluded. The final model selected was sqrtSales ~ sqrtTV + tRadio.
+
+
+```{r}
+reducedmodel <- lm(sqrtSales~sqrtTV+tRadio)
+summary(reducedmodel)
+```
+
+
+```{r}
+#Partial F-test to compare the transformed and reduced model
+anova(reducedmodel,transformedmodel)
+```
+
+A partial F-test was then used to compare the reduced model against the full model. The p-value of 0.4933 was well above 0.05, leading to the conclusion that the simpler model was sufficient. 
+
+```{r}
+#Diagnostic Plot for final model
+par(mfrow=c(2,2))
+plot(reducedmodel)
+```
+
+Residual diagnostics for the final model confirmed that assumptions of linearity, constant variance, and normality held reasonably well, with only minor outliers.
