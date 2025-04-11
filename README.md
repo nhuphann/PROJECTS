@@ -11,6 +11,9 @@ Welcome! This repository showcases my personal and academic projects in data ana
 
 - `STATS_INFERENCE_PROJECTS/`
   - 🔬 Morphine Pain Perception Study in R
+ 
+- `AVERTISING_EFFECTS/`
+  - 📊 Multiple linear regression on advertising data to evaluate the impact of TV, radio, and newspaper on product sales
 
 ---
 
